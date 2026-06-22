@@ -1,40 +1,44 @@
-# QuantPilot AI — data_collector.py
-# Downloads 5 years BTC/USDT 1h OHLCV from Binance via CCXT
-# Output: data/raw/btc_usdt_1h.csv
-
+!pip install ccxt pandas -q
 import ccxt
 import pandas as pd
-from datetime import datetime, timezone
-import time, os
+import time
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-os.makedirs(os.path.join(BASE, "raw"), exist_ok=True)
-OUTPUT = os.path.join(BASE, "raw", "btc_usdt_1h.csv")
+# ===== CONFIG =====
+exchange = ccxt.kraken()   # accessible from India, no API key needed
+SYMBOL = "BTC/USDT"
+TIMEFRAME = "1h"
+FILENAME = "BTC_USDT_1H_5years.csv"
 
-exchange = ccxt.binance({"enableRateLimit": True})
+YEARS = 5
+TOTAL_HOURS = YEARS * 365 * 24
 
-now_ms   = int(datetime.now(timezone.utc).timestamp() * 1000)
-since_ms = now_ms - (5 * 365 * 24 * 60 * 60 * 1000)
+since_ms = exchange.parse8601("2021-01-01T00:00:00Z")
+all_ohlcv = []
 
-all_candles = []
-since = since_ms
-
-print("Downloading BTC/USDT 1h data from Binance...")
+print("Downloading BTC/USDT hourly data from Kraken...")
 
 while True:
-    candles = exchange.fetch_ohlcv("BTC/USDT", "1h", since=since, limit=1000)
-    if not candles:
+    ohlcv = exchange.fetch_ohlcv(SYMBOL, TIMEFRAME, since=since_ms, limit=500)
+    if not ohlcv:
         break
-    all_candles.extend(candles)
-    since = candles[-1][0] + 1
-    print(f"  Fetched {len(all_candles)} candles so far...", end="\r")
-    time.sleep(0.3)
-    if candles[-1][0] >= now_ms - (2 * 3600 * 1000):
+    all_ohlcv.extend(ohlcv)
+    since_ms = ohlcv[-1][0] + 1
+    print(f"{len(all_ohlcv):,} candles fetched", end="\r")
+    time.sleep(0.5)
+    if len(all_ohlcv) >= TOTAL_HOURS:
         break
 
-df = pd.DataFrame(all_candles, columns=["timestamp","open","high","low","close","volume"])
-df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-df = df.drop_duplicates("timestamp").sort_values("timestamp").reset_index(drop=True)
+print(f"\nTotal candles: {len(all_ohlcv):,}")
 
-df.to_csv(OUTPUT, index=False)
-print(f"\nSaved {len(df)} rows to {OUTPUT}")
+# Build DataFrame matching your file's exact column names
+df = pd.DataFrame(
+    all_ohlcv,
+    columns=["Open time", "Open", "High", "Low", "Close", "Volume"]
+)
+df["Open time"] = pd.to_datetime(df["Open time"], unit="ms")
+df = df.drop_duplicates(subset="Open time").sort_values("Open time")
+
+df.to_csv(FILENAME, index=False)
+print(f"Saved {len(df):,} rows to '{FILENAME}'")
+print(df.head())
+print(df.tail())
