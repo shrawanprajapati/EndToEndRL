@@ -8,7 +8,6 @@
 [![Stable-Baselines3](https://img.shields.io/badge/StableBaselines3-PPO-orange)](https://stable-baselines3.readthedocs.io)
 [![Gymnasium](https://img.shields.io/badge/Gymnasium-Custom%20Env-purple)](https://gymnasium.farama.org)
 [![IITISoC](https://img.shields.io/badge/IITISoC-2026-red)](https://iiti.ac.in)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ---
 
@@ -30,13 +29,21 @@
    - [Sentiment Analysis Pipeline](#77-sentiment-analysis-pipeline)
    - [LLM Analyst Module](#78-llm-analyst-module)
 8. [Feature Engineering](#-feature-engineering)
+   - [Returns & Momentum](#group-1--returns--momentum)
+   - [Classical Technical Indicators](#group-2--classical-technical-indicators)
+   - [Volume & Order Flow](#group-3--volume--order-flow)
+   - [Trend & Price Structure](#group-4--trend--price-structure)
+   - [Volatility & Regime](#group-5--volatility--regime)
+   - [Statistical Moments](#group-6--statistical-moments)
+   - [Fractional Differentiation](#group-7--fractional-differentiation)
+   - [Hidden Markov Model](#group-8--hidden-markov-model-hmmlearn)
+   - [Cyclical Time Encodings](#group-9--cyclical-time-encodings)
 9. [API Reference](#-api-reference)
-10. [Validation Results](#-validation-results)
-11. [Frontend Dashboard](#-frontend-dashboard)
-12. [Installation & Setup](#-installation--setup)
-13. [Usage Guide](#-usage-guide)
-14. [Known Issues & Roadmap](#-known-issues--roadmap)
-15. [Contributing](#-contributing)
+10. [Frontend Dashboard](#-frontend-dashboard)
+11. [Installation & Setup](#-installation--setup)
+12. [Usage Guide](#-usage-guide)
+13. [Known Issues & Roadmap](#-known-issues--roadmap)
+14. [Contributing](#-contributing)
 
 ---
 
@@ -48,16 +55,15 @@ The platform is an end-to-end vertical slice — data ingestion, feature enginee
 
 ### Key Highlights
 
-| Metric | Value |
-|--------|-------|
-| **Agent Mean Return** (20 episodes) | **+2.03%** |
-| **Buy & Hold Return** (same period) | **-11.07%** |
-| **Net Alpha Generated** | **+13.09%** |
-| **Agent Win Rate** | **80.0%** |
-| **Beat Rate vs Passive** | **85.0%** |
-| **Mean Sharpe Ratio** | **0.9351** |
-| **Mean Calmar Ratio** | **9.3630** |
-| **Mean Max Drawdown** | **0.89%** |
+| Capability | Description |
+|------------|-------------|
+| **RL-Powered Decisions** | PPO agent trained on 4.5 years of BTC/USDT OHLCV data |
+| **Live Market Streaming** | Real-time candlestick data via Binance WebSocket API |
+| **Sentiment-Aware** | Live news classification from CoinDesk, Bloomberg, Reuters & more |
+| **Regime Detection** | Hidden Markov Model classifies market structure and adapts risk posture |
+| **LLM Analyst** | Natural-language diagnostic assistant powered by Gemini |
+| **Dual Backtesting** | VectorBT for classical strategies + custom RL episodic loop |
+| **Full-Stack** | Flutter dashboard ↔ FastAPI backend ↔ Stable-Baselines3 RL engine |
 
 ---
 
@@ -462,21 +468,159 @@ Automated response priority matrix:
 
 ## 📊 Feature Engineering
 
-The following technical indicators are computed and used as state inputs and chart overlays:
+**Entry point:** `data/feature_engineer.py`
+**Input:** `data/raw/btc_usdt_1h.csv` (raw OHLCV, 1-hour candles)
+**Output:** `data/processed/featured_data.csv` — 38 columns, 0 NaN after warm-up drop
 
-| Indicator | Parameters | Purpose |
-|-----------|-----------|---------|
-| EMA20 | 20-period | Short-term trend tracking |
-| EMA50 | 50-period | Medium-term trend tracking |
-| SMA200 | 200-period | Long-term trend / support-resistance |
-| RSI | 14-period | Momentum / overbought-oversold |
-| MACD | (12, 26, 9) | Trend momentum + signal crossover |
-| Bollinger Bands | (20, 2σ) | Volatility channels + band position |
-| VWAP | Daily | Volume-weighted fair value |
-| ATR | 14-period | True volatility range |
-| StochRSI | 14-period | Stochastic oscillator of RSI |
-| GARCH Volatility | Rolling | Statistical regime volatility estimation |
-| HMM Regime | Hidden states | Market regime classification |
+> ⚠️ **Library note:** Uses `ta` (Technical Analysis library), **not** `pandas_ta` — `pandas_ta` is incompatible with Python 3.14+.
+> Install with: `pip install ta hmmlearn arch`
+
+---
+
+### Input Columns (OHLCV Base)
+
+| Column | Description |
+|--------|-------------|
+| `timestamp` | Hourly candle open time |
+| `open` | Opening price |
+| `high` | Period high |
+| `low` | Period low |
+| `close` | Closing price |
+| `volume` | Trade volume |
+
+---
+
+### Group 1 — Returns & Momentum
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `returns_1h` | `log(close / close.shift(1))` — 1-hour log return | ❌ (bounded) |
+| `momentum_24h` | `log(close / close.shift(24))` — 24-hour log return | ✅ z-score |
+
+---
+
+### Group 2 — Classical Technical Indicators
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `rsi_14` | RSI(14) via `ta`, scaled to **[0, 1]** | ❌ (already bounded) |
+| `macd_line` | MACD line (12, 26, 9) via `ta` | ✅ z-score |
+| `macd_signal` | MACD signal line (12, 26, 9) via `ta` | ✅ z-score |
+| `atr_14` | ATR(14) divided by `close` — normalised true range | ❌ (ratio) |
+| `bollinger_b` | Bollinger %B (20, 2σ) via `ta` — price position inside bands | ❌ (bounded [0,1]) |
+
+---
+
+### Group 3 — Volume & Order Flow
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `volume_change` | `vol.pct_change(1)` — 1-period volume % change | ✅ z-score |
+| `log_volume` | `log(1 + volume)` | ✅ z-score |
+| `volume_spike` | `1` if volume > 2× 20-period average, else `0` | ❌ (binary flag) |
+| `price_to_vwap` | `close / VWAP_24h` — VWAP computed over rolling 24-candle window using typical price × volume | ✅ z-score |
+| `cvd_24h` | Cumulative Volume Delta proxy — `((close−low)−(high−close)) / (high−low)` × volume, rolled 24h, normalised by rolling volume | ✅ z-score |
+| `intraday_intensity` | `((2×close − high − low) / (high − low)) × volume` — buying/selling pressure inside the bar | ✅ z-score |
+| `rvs` | Relative Volume Score — `volume / median_volume_same_hour` over trailing 720 candles | ✅ z-score |
+
+---
+
+### Group 4 — Trend & Price Structure
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `price_position` | `(close − rolling_low_20) / (rolling_high_20 − rolling_low_20)` — price in 20-period range | ❌ (bounded [0,1]) |
+| `ema_ratio` | `close / EMA50` — distance from medium-term trend | ✅ z-score |
+| `golden_cross_ratio` | `EMA50 / EMA200` — golden/death cross proximity | ✅ z-score |
+
+---
+
+### Group 5 — Volatility & Regime
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `volatility_ratio` | `std_7 / std_30` of pct_change — short vs long-term volatility | ✅ z-score |
+| `vol_compression` | `ATR_4h / ATR_168h` — short vs long-horizon ATR compression ratio | ✅ z-score |
+| `drawdown_72h` | `(rolling_max_72h − close) / rolling_max_72h` — rolling 72-candle drawdown | ✅ z-score |
+| `garch_vol` | GARCH(1,1) conditional volatility forecast (`arch` library, returns scaled ×100 for numerical stability, divided back) | ✅ z-score |
+
+---
+
+### Group 6 — Statistical Moments
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `skew_24h` | 24-period rolling skewness of returns → 5-period MA → `.shift(1)` (causal) | ✅ z-score |
+| `kurt_24h` | 24-period rolling kurtosis of returns → 5-period MA → `.shift(1)` (causal) | ✅ z-score |
+
+---
+
+### Group 7 — Fractional Differentiation
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `frac_diff_0_5` | Custom `frac_diff_d45()` — fractional differentiation at **d = 0.45** with **50-lag lookback window** using binomial weight series. Balances stationarity (needed for ML) vs memory retention (needed for RL context). | ✅ z-score |
+
+---
+
+### Group 8 — Hidden Markov Model (hmmlearn)
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `hmm_regime` | Gaussian HMM (3 hidden states, full covariance, 100 iter) fit on `[returns_1h, atr_14]`. State labels shifted by −1 to centre around 0. | ❌ |
+| `hmm_prob_0` | HMM transition matrix row → probability of being in regime 0 | ❌ |
+| `hmm_prob_1` | Probability of being in regime 1 | ❌ |
+| `hmm_prob_2` | Probability of being in regime 2 | ❌ |
+
+---
+
+### Group 9 — Cyclical Time Encodings
+
+Avoids ordinal bias (e.g. hour 23 is not "greater than" hour 0). Both sin and cos needed to disambiguate all positions on the cycle.
+
+| Column | Computation | Normalised? |
+|--------|-------------|-------------|
+| `hour_sin` | `sin(2π × hour / 24)` | ❌ (bounded [−1, 1]) |
+| `hour_cos` | `cos(2π × hour / 24)` | ❌ (bounded [−1, 1]) |
+| `day_sin` | `sin(2π × day_of_week / 7)` | ❌ (bounded [−1, 1]) |
+| `day_cos` | `cos(2π × day_of_week / 7)` | ❌ (bounded [−1, 1]) |
+
+---
+
+### Normalisation Strategy
+
+All z-score normalised columns use **rolling window z-scoring** (window = 500 candles, min_periods = 1) to prevent any look-ahead bias:
+
+```
+z = (x − rolling_mean_500) / rolling_std_500    clipped to [−3, +3]
+```
+
+Clipping to ±3σ limits the impact of fat-tail outliers on the neural network's gradient updates.
+
+**Columns that are NOT z-scored** are already bounded by construction: `rsi_14` [0,1], `bollinger_b` [0,1], `price_position` [0,1], `volume_spike` {0,1}, `hour/day sin/cos` [−1,1], `hmm_*` (categorical probabilities).
+
+---
+
+### Pipeline Output
+
+```bash
+python data/feature_engineer.py
+
+# Console output:
+# Loaded 43800 rows from data/raw/btc_usdt_1h.csv
+# Computing true fractional differentiation (d=0.45) with 50-lag memory...
+# Fitting Gaussian HMM to detect regimes & transition probabilities...
+# Fitting GARCH(1,1) conditional variance forecasting...
+# Calculating Institutional Order Flow Proxies...
+# Adding rolling third and fourth statistical moments...
+# Computing Intraday Intensity Variance...
+# Calculating Volatility Compression Ratios (4h ATR / 168h ATR)...
+# Computing Relative Volume Velocity (RVS)...
+# Tracking rolling 72h max market drawdown...
+# Dropped 723 warm-up rows
+# Saved -> data/processed/featured_data.csv  |  shape=(43077, 38)
+# Saved -> docs/feature_correlation.png
+```
 
 ---
 
@@ -551,66 +695,6 @@ The following technical indicators are computed and used as state inputs and cha
   "max_exposure": 0.80
 }
 ```
-
----
-
-## ✅ Validation Results
-
-Full evaluation output from `evaluate.py` across 20 held-out test episodes:
-
-```
-[EVALUATION] Loading dataset: data/processed/test.csv
-[EVALUATION] Running 20 episodes...
-
-Episode  1/20  return=  2.82%  buy&hold=-23.31%  alpha=+26.13%  max_drawdown= 0.80%
-Episode  2/20  return=  2.95%  buy&hold=-23.49%  alpha=+26.44%  max_drawdown= 0.80%
-Episode  3/20  return=  3.04%  buy&hold=-13.06%  alpha=+16.10%  max_drawdown= 0.80%
-Episode  4/20  return=  2.95%  buy&hold=-18.47%  alpha=+21.42%  max_drawdown= 0.80%
-Episode  5/20  return=  3.10%  buy&hold= -3.19%  alpha= +6.29%  max_drawdown= 0.93%
-Episode  6/20  return= -0.98%  buy&hold=  8.49%  alpha= -9.47%  max_drawdown= 0.98%
-Episode  7/20  return= -0.98%  buy&hold= 15.44%  alpha=-16.42%  max_drawdown= 0.98%
-Episode  8/20  return=  3.15%  buy&hold=-10.52%  alpha=+13.67%  max_drawdown= 0.80%
-Episode  9/20  return=  3.25%  buy&hold= -2.17%  alpha= +5.41%  max_drawdown= 0.80%
-Episode 10/20  return=  0.21%  buy&hold= -0.49%  alpha= +0.70%  max_drawdown= 1.10%
-...
-Episode 20/20  return=  2.95%  buy&hold=-18.68%  alpha=+21.63%  max_drawdown= 0.80%
-
--------- Backtest summary --------
-Episodes evaluated        : 20
-Mean return               : 2.03%
-Std of returns            : 1.66%
-Best episode              : 3.25%
-Worst episode             : -1.27%
-Win rate (agent > 0)      : 80.0%
-Mean max drawdown         : 0.89%
-Worst-case drawdown       : 1.71%
-Mean Sharpe ratio         : 0.9351
-Mean Sortino ratio        : 0.4631
-Mean Calmar ratio         : 9.3630
-Mean Omega ratio          : 1.8126
-
--------- Alpha vs buy & hold -----
-Mean buy-and-hold return  : -11.07%
-Mean alpha                : +13.09%
-Std of alpha              : 12.96%
-Best alpha                : +26.44%
-Worst alpha               : -16.42%
-Beat rate (alpha > 0)     : 85.0%
-  -> Beat rate answers: 'did the agent outperform passive holding?'
-     A positive mean alpha in a down market = the agent is working.
-
-[SUCCESS] Saved -> models/saved/eval_results.json
-```
-
-### Alpha vs Passive Benchmark
-
-```
-  Agent Mean Return   ████████████████████  +2.03%
-  Buy & Hold Return   ████████████████████████████████  -11.07%
-                      Net Alpha Generated  =  +13.09%
-```
-
-> The agent achieves **85.0% beat rate** against passive holding — proving the policy learned defensive positioning in unfavorable macro regimes rather than simply riding the market upward.
 
 ---
 
@@ -782,12 +866,6 @@ The longer-term roadmap positions QuantPilot AI as a **retail-accessible AI trad
 5. Open a Pull Request against `main`
 
 Please ensure all new Python code passes `flake8` linting and all new Dart code passes `flutter analyze` before opening a PR.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 
