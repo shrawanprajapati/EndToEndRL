@@ -1,0 +1,2 @@
+timestamp,event,price,drawdown,regime,initiator
+2026-06-28 12:17:11.615132,EMERGENCY_STOP,62735.2,0.0,Bearish,API_CALL

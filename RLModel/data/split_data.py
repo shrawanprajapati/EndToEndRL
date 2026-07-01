@@ -1,28 +1,61 @@
-# QuantPilot AI — split_data.py
-# Splits featured data into train (4.5 years) + test (6 months)
-# Input:  data/processed/featured_data.csv
-# Output: data/processed/train.csv  +  data/processed/test.csv
+"""
+data/split_data.py  |  Day 4  |  M1 — Data Engineer
+──────────────────────────────────────────────────────
+READS   : data/processed/featured_data.csv
+PRODUCES: data/processed/train.csv  (first ~54 months)
+          data/processed/test.csv   (last 6 months — LOCKED until Day 14)
+
+RUN ONCE: python data/split_data.py
+After this runs, treat test.csv as if it does not exist until Day 14.
+"""
 
 import pandas as pd
-import os
 
-BASE   = os.path.dirname(os.path.abspath(__file__))
-INPUT  = os.path.join(BASE, "processed", "featured_data.csv")
-TRAIN  = os.path.join(BASE, "processed", "train.csv")
-TEST   = os.path.join(BASE, "processed", "test.csv")
+IN_PATH    = "data/processed/featured_data.csv"
+TRAIN_PATH = "data/processed/train.csv"
+VAL_PATH   = "data/processed/val.csv"
+TEST_PATH  = "data/processed/test.csv"
 
-df = pd.read_csv(INPUT, parse_dates=["timestamp"])
-df = df.sort_values("timestamp").reset_index(drop=True)
+# 6 months × 30 days × 24 hours = 4,320 rows reserved for testing
+TEST_HOURS = 6 * 30 * 24
 
-split_date = df["timestamp"].max() - pd.DateOffset(months=6)
 
-train = df[df["timestamp"] <  split_date].reset_index(drop=True)
-test  = df[df["timestamp"] >= split_date].reset_index(drop=True)
+if __name__ == "__main__":
+    # load the full featured dataset
+    df = pd.read_csv(IN_PATH, parse_dates=["timestamp"])
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    print(f"Loaded {len(df)} rows from {IN_PATH}")
 
-train.to_csv(TRAIN, index=False)
-test.to_csv(TEST,   index=False)
+    # calculate where training ends and testing begins
+    # everything before cut → train_val, everything from cut onward → test
+    cut   = len(df) - TEST_HOURS
+    train_val = df.iloc[:cut].reset_index(drop=True)
+    test  = df.iloc[cut:].reset_index(drop=True)
 
-print(f"Train: {len(train)} rows  ({train['timestamp'].min().date()} → {train['timestamp'].max().date()})")
-print(f"Test:  {len(test)}  rows  ({test['timestamp'].min().date()}  → {test['timestamp'].max().date()})")
-print(f"Files saved to: {os.path.join(BASE, 'processed')}")
-print("⚠️  test.csv is now LOCKED — do not open until Day 14")
+    # 80/20 train/val split
+    split = int(len(train_val) * 0.8)
+    train = train_val.iloc[:split].reset_index(drop=True)
+    val   = train_val.iloc[split:].reset_index(drop=True)
+
+    # save all splits
+    train.to_csv(TRAIN_PATH, index=False)
+    val.to_csv(VAL_PATH, index=False)
+    test.to_csv(TEST_PATH,   index=False)
+
+    # print summary so M1 can verify the split looks correct
+    print(f"\nTrain : {len(train)} rows")
+    print(f"  From : {train['timestamp'].min()}")
+    print(f"  To   : {train['timestamp'].max()}")
+    print(f"\nVal   : {len(val)} rows")
+    print(f"  From : {val['timestamp'].min()}")
+    print(f"  To   : {val['timestamp'].max()}")
+    print(f"\nTest  : {len(test)} rows")
+    print(f"  From : {test['timestamp'].min()}")
+    print(f"  To   : {test['timestamp'].max()}")
+
+    print()
+    print("WARNING: test.csv is now LOCKED.")
+    print("   Do not open it for any reason until Day 14 (run_backtest.py).")
+    print(f"   Saved -> {TRAIN_PATH}")
+    print(f"   Saved -> {VAL_PATH}")
+    print(f"   Saved -> {TEST_PATH}")
