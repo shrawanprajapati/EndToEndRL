@@ -1,0 +1,33 @@
+name: rl_trading_ui
+description: "QuantPilot AI - Reinforcement Learning Trading Dashboard"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.5.1
+  http: ^1.2.2
+  web_socket_channel: ^2.4.5
+  google_fonts: ^6.1.0
+  xml: ^6.5.0
+  shared_preferences: ^2.2.0
+  crypto: ^3.0.3
+  url_launcher: ^6.3.0
+  intl: ^0.19.0
+  uuid: ^4.4.0
+  syncfusion_flutter_charts: ^26.1.39
+  fl_chart: ^0.69.0
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
