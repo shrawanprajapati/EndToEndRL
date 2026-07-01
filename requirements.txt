@@ -1,0 +1,55 @@
+# ============================================================
+# QuantPilot AI — requirements.txt
+# Python 3.10+ required
+# Install: pip install -r requirements.txt
+# ============================================================
+
+
+# ── Web Framework & Server ───────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+websockets==12.0
+python-multipart==0.0.9
+
+
+# ── Data Processing ──────────────────────────────────────────
+pandas==2.2.2
+numpy==1.26.4
+
+
+# ── Technical Indicators ─────────────────────────────────────
+# NOTE: Use 'ta' only — pandas_ta is incompatible with Python 3.14+
+ta==0.11.0
+
+
+# ── Reinforcement Learning ───────────────────────────────────
+gymnasium==0.29.1
+stable-baselines3==2.3.2
+torch==2.3.0                  # PyTorch backend for Stable-Baselines3
+
+
+# ── Backtesting ──────────────────────────────────────────────
+vectorbt==0.26.2
+
+
+# ── Volatility & Regime Detection ────────────────────────────
+arch==6.3.0                   # GARCH(1,1) conditional volatility
+hmmlearn==0.3.2               # Gaussian HMM market regime classifier
+
+
+# ── Live Market Data ─────────────────────────────────────────
+python-binance==1.0.19        # Binance REST + WebSocket API
+
+
+# ── LLM Integration ──────────────────────────────────────────
+google-generativeai==0.7.2    # Gemini API for Analyst Tab
+
+
+# ── Utilities ────────────────────────────────────────────────
+python-dotenv==1.0.1          # .env file loading for API keys
+httpx==0.27.0                 # Async HTTP client (used internally by FastAPI)
+pydantic==2.7.1               # Data validation & serialisation (FastAPI models)
+
+
+# ── Visualisation (optional — for feature_engineer.py heatmap) ──
+matplotlib==3.9.0
