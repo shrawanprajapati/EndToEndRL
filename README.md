@@ -729,8 +729,8 @@ python data/feature_engineer.py
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/shrawanprajapati/quantpilot-ai.git
-cd quantpilot-ai
+git clone https://github.com/shrawanprajapati/EndToEndRL.git
+cd EndToEndRL
 ```
 
 ### 2. Set Up the Python Environment
