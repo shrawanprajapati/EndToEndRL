@@ -1,24 +1,3 @@
-"""
-env/portfolio.py  |  Day 6  |  M2 — Env Engineer
-No Gymnasium dependency — pure math only.
-Tracks cash (USDT) and BTC, executes trades with fee + slippage.
-Imported by: trading_env.py
-
-FIX (this version): the original rebalance() charged fee+slippage in dollars
-via `cost`, then ALSO applied slippage a second time through `effective_price`,
-then ALSO subtracted `cost` a second time from cash/proceeds. Net effect: every
-trade lost roughly 2x its intended fee+slippage, silently, on both buy and sell.
-This was the root cause of the consistently negative backtest returns — a
-structural drag baked into every rebalance regardless of strategy quality.
-
-Now: SLIPPAGE only ever shows up once, baked into `effective_price`. FEE is
-the only thing taken out as a separate dollar `cost`. Cash/BTC movements are
-computed once, cleanly, with no double subtraction.
-"""
-
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 FEE      = 0.001   # 0.1% Binance fee on every trade
 SLIPPAGE = 0.0005  # 0.05% slippage on market orders
 MIN_TRADE_FRACTION = 0.02
@@ -41,8 +20,6 @@ class Portfolio:
         # fraction of portfolio currently held as BTC (0.0 to 1.0)
         total = self.value(price)
         return (self.btc * price / total) if total > 0 else 0.0
-
-    # ── core trade method ─────────────────────────────────────────────────────
 
     # ── core trade method ─────────────────────────────────────────────────────
 
@@ -92,7 +69,7 @@ class Portfolio:
             cost_usdt = btc_to_trade * effective_price
             self.btc += btc_to_trade
             self.cash -= (cost_usdt + fee_cost)
-            
+
             # Record trade log
             self.trade_log.append({
                 "action": float(target_allocation),
@@ -108,7 +85,7 @@ class Portfolio:
             proceeds_usdt = abs(btc_to_trade) * effective_price
             self.btc += btc_to_trade  # negative values add down
             self.cash += (proceeds_usdt - fee_cost)
-            
+
             # Record trade log
             self.trade_log.append({
                 "action": float(target_allocation),

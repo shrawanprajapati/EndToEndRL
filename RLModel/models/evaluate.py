@@ -40,7 +40,7 @@ import json
 import numpy as np
 import pandas as pd
 import argparse
-from sb3_contrib import RecurrentPPO
+from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from env.trading_env import TradingEnvironment
@@ -69,7 +69,7 @@ def load_model_and_env():
     env.training   = False  # freeze stats — do NOT let test data update them
     env.norm_reward = False  # we want real portfolio returns, not normalised reward
 
-    model = RecurrentPPO.load(MODEL_PATH, env=env)
+    model = PPO.load(MODEL_PATH, env=env)
     return model, env
 
 
@@ -86,7 +86,6 @@ def run_episode(model, env):
         price at the current bar).  Falls back to None if the env does not
         expose this key, in which case alpha is skipped for the episode.
     """
-def run_episode(model, env):
     obs = env.reset()
     done = [False]
     values = []

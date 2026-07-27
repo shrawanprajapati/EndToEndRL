@@ -44,32 +44,29 @@ class TradingService:
             
             base_env = DummyVecEnv([make_env])
             self.env = base_env
-                
-            from sb3_contrib import RecurrentPPO
-            self.model = RecurrentPPO.load(self.model_path, env=self.env)
+
+            # Import the custom policy so pickle can deserialize it from the zip
+            from models.noisy_net import NoisyActorCriticPolicy
+            self.model = PPO.load(
+                self.model_path,
+                env=self.env,
+                custom_objects={"policy_class": NoisyActorCriticPolicy},
+            )
             self.is_ready = True
             print("Trading Service Initialized: RL Model Loaded.")
-            
-            asyncio.create_task(self.run_simulation_loop())
+            # Note: run_simulation_loop is started by the WebSocket endpoint, not here
         except Exception as e:
             print(f"Error initializing Trading Service: {e}")
 
-    def predict(self, observation, lstm_states=None, episode_starts=None):
+    def predict(self, observation):
+        """Run one step of inference with the PPO policy."""
         if not self.is_ready or self.model is None:
-            return 0.0, lstm_states
-        
-        action, lstm_states = self.model.predict(
-            observation, 
-            state=lstm_states, 
-            episode_start=episode_starts, 
-            deterministic=True
-        )
-        return float(np.asarray(action).reshape(-1)[0]), lstm_states
+            return 0.0
+        action, _ = self.model.predict(observation, deterministic=True)
+        return float(np.asarray(action).reshape(-1)[0])
 
-    async def run_simulation_loop(self):
-        """Runs a continuous background simulation loop updating STATE."""
-        import asyncio
-        from backend.main import STATE, callback_tick
+    async def run_simulation_loop(self, callback=None):
+        """Runs a continuous simulation loop, calling callback(data) for each tick."""
 
         if not self.is_ready or self.env is None:
             return
@@ -77,32 +74,25 @@ class TradingService:
         print("Starting live simulation stream...")
         
         obs = _unwrap_reset(self.env.reset())
-        lstm_states = None
-        episode_starts = np.ones((1,), dtype=bool)
         
         while True:
-            action, lstm_states = self.predict(
-                obs, 
-                lstm_states=lstm_states, 
-                episode_starts=episode_starts
-            )
+            action = self.predict(obs)
             obs, reward, done, info = _unwrap_step(self.env.step([action]))
-            episode_starts = np.array([done])
             
             # Send tick to frontend clients
             data = {
                 "type": "tick",
-                "price": float(info["price"]),
+                "price": float(info[0]["price"]) if isinstance(info, list) else float(info["price"]),
                 "action": float(action),
-                "portfolio_value": float(info["portfolio_value"]),
-                "drawdown": float(info["drawdown"]),
-                "unrealized_pnl": float(info.get("unrealized_pnl", 0.0)),
-                "hmm_regime": info.get("hmm_regime", "Unknown"),
+                "portfolio_value": float(info[0]["portfolio_value"]) if isinstance(info, list) else float(info["portfolio_value"]),
+                "drawdown": float(info[0]["drawdown"]) if isinstance(info, list) else float(info["drawdown"]),
+                "unrealized_pnl": float((info[0] if isinstance(info, list) else info).get("unrealized_pnl", 0.0)),
+                "hmm_regime": (info[0] if isinstance(info, list) else info).get("hmm_regime", "Unknown"),
                 "timestamp": datetime.now().isoformat()
             }
             
-            STATE["latest_tick"] = data
-            await callback_tick(data)
+            if callback is not None:
+                await callback(data)
 
             if done:
                 obs = _unwrap_reset(self.env.reset())

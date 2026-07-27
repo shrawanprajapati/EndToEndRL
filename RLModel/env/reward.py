@@ -1,12 +1,10 @@
-"""
-env/reward.py — Simplified Reward Function
-Includes pure return signal, conditional drawdown thresholds,
-transaction cost penalization, and a regime-adaptive cash holding bonus.
-"""
 
-def compute_reward(step_return, drawdown, 
+def compute_reward(step_return, drawdown,
                    transaction_cost, rolling_vol,
-                   regime="neutral"):
+                   regime="neutral",
+                   drawdown_penalty_multiplier=50.0,
+                   bearish_bonus_value=0.1,
+                   min_vol_floor=1e-4):
     """
     Computes a differential Sharpe-inspired reward signal for the PPO agent.
     
@@ -16,6 +14,9 @@ def compute_reward(step_return, drawdown,
         transaction_cost (float): Fee cost as a fraction of portfolio value.
         rolling_vol (float): Volatility of recent negative returns (downside vol).
         regime (str): The current HMM market regime ("bearish" or "neutral").
+        drawdown_penalty_multiplier (float): Multiplier for the drawdown penalty.
+        bearish_bonus_value (float): The bonus applied for capital preservation in bearish regimes.
+        min_vol_floor (float): Minimum value for rolling volatility to prevent division by zero.
         
     Returns:
         float: Bounded continuous reward.
@@ -26,19 +27,19 @@ def compute_reward(step_return, drawdown,
     net_return = step_return - transaction_cost
     
     # 2. Differential Sharpe Base (Return / Downside Volatility)
-    # We add a small epsilon to prevent division by zero
-    vol_penalty = max(rolling_vol, 1e-4)
+    # We add a small epsilon to prevent division by zero, using an adjustable floor
+    vol_penalty = max(rolling_vol, min_vol_floor)
     risk_adjusted_return = net_return / vol_penalty
     
     # 3. Asymmetric Drawdown Penalty
-    # The penalty scales quadratically as drawdown deepens
-    drawdown_penalty = (drawdown ** 2) * 50.0
+    # The penalty scales quadratically as drawdown deepens, with an adjustable multiplier
+    drawdown_penalty = (drawdown ** 2) * drawdown_penalty_multiplier
     
     # 4. Regime Awareness Bonus
     regime_bonus = 0.0
     if regime == "bearish" and net_return > -1e-5:
-        # Heavily reward capital preservation in bear markets
-        regime_bonus = 0.1
+        # Heavily reward capital preservation in bear markets with an adjustable bonus
+        regime_bonus = bearish_bonus_value
         
     reward = risk_adjusted_return - drawdown_penalty + regime_bonus
     

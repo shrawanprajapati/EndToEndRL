@@ -13,7 +13,14 @@ import sys
 from google import genai
 from google.genai import types
 
-client = genai.Client()
+# Client is initialized lazily to avoid crash if GEMINI_API_KEY is not set at import time
+_genai_client = None
+
+def get_genai_client():
+    global _genai_client
+    if _genai_client is None:
+        _genai_client = genai.Client()
+    return _genai_client
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BACKEND_DIR)
@@ -305,6 +312,7 @@ async def trigger_report():
 
     try:
         # 3. Request structured synthesis report from Gemini
+        client = get_genai_client()
         response = client.models.generate_content(
             model='gemini-2.0-flash', # Corrected model version
             contents=user_prompt,
@@ -371,6 +379,7 @@ async def agent_chat(request: ChatRequest):
 
     try:
         # 3. Request analysis using the official, recommended SDK generation model
+        client = get_genai_client()
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=request.message,
@@ -454,7 +463,7 @@ async def stream_data(websocket: WebSocket):
             pass
 
     try:
-        await trading_service.run_simulation_loop(send_tick)
+        await trading_service.run_simulation_loop(callback=send_tick)
     except WebSocketDisconnect:
         pass
 

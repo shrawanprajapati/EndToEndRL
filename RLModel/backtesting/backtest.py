@@ -8,9 +8,13 @@ import sys
 import numpy as np
 from pathlib import Path
 import pandas as pd
-# --- ADDED MISSING IMPORT ---
-from backtest import metrics 
-# ----------------------------
+
+# Ensure the RLModel directory is on the path so 'backtest' package is importable
+_rlmodel_dir = str(Path(__file__).resolve().parent.parent)
+if _rlmodel_dir not in sys.path:
+    sys.path.insert(0, _rlmodel_dir)
+
+from backtest import metrics
 
 try:
     from .config import REPORT_DIR, DATASETS
@@ -22,6 +26,8 @@ except ImportError:
     from utils import load_data, run_backtest, calculate_metrics, save_all_outputs, plot_equity_curves
 
 from stable_baselines3 import PPO
+from sb3_contrib import RecurrentPPO
+import models.noisy_net  # noqa: F401 — required so pickle can deserialize NoisyActorCriticPolicy
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from env.trading_env import TradingEnvironment
 
@@ -31,7 +37,12 @@ def run_rl_model_backtest(mode="test"):
     model_path = str(Path(__file__).resolve().parent.parent / "models" / "saved" / "ppo_final")
     
     env = TradingEnvironment(data_path=str(data_path))
-    model = PPO.load(model_path, env=env)
+    from models.noisy_net import NoisyActorCriticPolicy
+    model = PPO.load(
+        model_path,
+        env=env,
+        custom_objects={"policy_class": NoisyActorCriticPolicy},
+    )
     
     obs = env.reset()
     if isinstance(obs, tuple): obs = obs[0]

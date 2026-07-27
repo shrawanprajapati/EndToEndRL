@@ -15,7 +15,7 @@ STATE VECTOR (28 features):
   Portfolio(6): current_allocation, unrealised_pnl, hours_since_trade,
                 drawdown, rolling_volatility, recent_return
 
-ACTION SPACE: Box([0], [1]) — target BTC allocation
+ACTION SPACE: Box([-1], [1]) — target BTC allocation
               0.0 = 100% cash,  1.0 = 100% BTC
 """
 
@@ -104,8 +104,13 @@ class TradingEnvironment(gym.Env):
             low=-np.inf, high=np.inf, shape=(OBS_SIZE,), dtype=np.float32
         )
         # action space: one continuous value — target BTC allocation [0, 1]
+        # NOTE: Range is [0.0, 1.0] to match the saved ppo_final model weights.
+        # 0.0 = 100% cash, 1.0 = 100% BTC (long-only strategy)
         self.action_space = spaces.Box(
-            low=0.0, high=1.0, shape=(1,), dtype=np.float32
+            low=0.0,
+            high=1.0,
+            shape=(1,),
+            dtype=np.float32
         )
 
         # internal state — properly initialised in reset()
@@ -234,7 +239,13 @@ class TradingEnvironment(gym.Env):
         action = atr_position_cap(action, atr)
 
         # Action clamp based on dynamic max position size limit [0.0, max_position_size]
-        action = float(np.clip(action, 0.0, max_position_size))
+        action = float(
+          np.clip(
+        action,
+        -max_position_size,
+        max_position_size
+    )
+)
 
         # ── Stage 3: Execute the trade ────────────────────────────────────────
         cost = self.portfolio.rebalance(action, price, atr=atr)
